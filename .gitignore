@@ -1,0 +1,9 @@
+.build/
+build/
+Spike/spike
+Support/Icons/AppIcon.iconset/
+Support/Icons/*-preview.png
+Support/Icons/AppIcon-1024.png
+*.xcodeproj
+.swiftpm/
+.DS_Store
