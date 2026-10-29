@@ -25,7 +25,7 @@ Requires macOS 14+ and Swift 6. The Command Line Tools are enough: the package d
 
 ## Use
 
-Select a word or phrase anywhere, press **⌥⌘T** (changeable in Settings). The tooltip shows the translation, transliteration, part of speech, up to three alternative senses, and a copy button. Long results grow up to 60% of the screen height and then scroll (scroll with the pointer over the tooltip). It dismisses on click, scroll or keypress in another app, Esc, or after a timeout (it waits while the pointer is over it).
+Select a word or phrase anywhere, press **⌥⌘T** (changeable in Settings). The tooltip shows the translation, transliteration, part of speech, up to three alternative senses, and a copy button. If nothing is selected, the shortcut opens a text field instead: type a word or phrase and press Return (or *Translate*, or the shortcut again). Long results grow up to 60% of the screen height and then scroll (scroll with the pointer over the tooltip). It dismisses on click, scroll or keypress in another app, Esc, or after a timeout (it waits while the pointer is over it).
 
 ## How it works
 

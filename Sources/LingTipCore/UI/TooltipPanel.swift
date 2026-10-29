@@ -3,6 +3,8 @@ import Combine
 import SwiftUI
 
 enum TooltipState {
+    /// Nothing was selected: let the user type the text instead.
+    case input
     case loading(String, LanguagePair)
     case result(String, TranslationResult, LanguagePair)
     case error(String, hint: String? = nil)
@@ -15,6 +17,10 @@ final class TooltipModel: ObservableObject {
     @Published var width: CGFloat = 360
     /// Tallest the card may grow before its content scrolls.
     @Published var maxHeight: CGFloat = 480
+    /// Text typed in the `.input` state.
+    @Published var draft = ""
+    /// Called when the user submits the typed text (Return or the Translate button).
+    var onSubmit: ((String) -> Void)?
     /// Upper bound for maxHeight while dragging (the anchor screen's usable height).
     var screenLimit: CGFloat = 1200
     /// Size at the start of a corner drag (no @State: see Package.swift).
@@ -25,8 +31,11 @@ final class TooltipModel: ObservableObject {
     var onResizeEnd: ((CGFloat, CGFloat) -> Void)?
 }
 
-/// Borderless, non-activating floating panel. Never takes focus from the app the user is in.
+/// Borderless, non-activating floating panel. Takes keyboard focus only while showing the
+/// text input; even then it does not activate LingTip, so the user's app stays frontmost.
 final class TooltipPanel: NSPanel {
+    var acceptsKeyboard = false
+
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 80),
@@ -46,7 +55,7 @@ final class TooltipPanel: NSPanel {
         isReleasedWhenClosed = false
     }
 
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { acceptsKeyboard }
     override var canBecomeMain: Bool { false }
 }
 
@@ -102,7 +111,24 @@ final class TooltipController {
         if !panel.isVisible { installMonitors() }
         reposition()
         panel.orderFrontRegardless()
+        if case .input = state {
+            panel.acceptsKeyboard = true
+            panel.makeKey()
+        }
         scheduleAutoHide(for: state)
+    }
+
+    /// Show an empty text field for the user to type into.
+    func showInput(at point: NSPoint, onSubmit: @escaping (String) -> Void) {
+        model.draft = ""
+        model.onSubmit = onSubmit
+        show(.input, at: point)
+    }
+
+    /// The typed text while the input is on screen; nil otherwise.
+    var inputDraft: String? {
+        guard panel.isVisible, case .input = model.state else { return nil }
+        return model.draft
     }
 
     func hide() {
@@ -110,6 +136,7 @@ final class TooltipController {
         hideTask = nil
         removeMonitors()
         panel.orderOut(nil)
+        panel.acceptsKeyboard = false
     }
 
     /// Current panel size, read by the checks harness.
@@ -143,7 +170,7 @@ final class TooltipController {
         hideTask?.cancel()
         let seconds: Double
         switch state {
-        case .loading: return // keep while working
+        case .loading, .input: return // keep while working or typing
         case .result: seconds = settings.autoHideSeconds
         case .error: seconds = 5
         }

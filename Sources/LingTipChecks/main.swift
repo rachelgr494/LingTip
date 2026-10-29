@@ -270,6 +270,10 @@ suite("Tooltip sizing") {
         let medium = measure(.result(few, TranslationResult(translation: few), pair))
         check(medium.height > short.height && medium.height < 400, "medium text sizes to content: \(medium.height)")
 
+        let input = measure(.input)
+        check(input.width, equals: 440, "input card takes the model width")
+        check(input.height > 60 && input.height < 200, "input card is compact: \(input.height)")
+
         model.width = 900
         let wide = measure(.result(few, TranslationResult(translation: few), pair))
         check(wide.height < medium.height, "wider card wraps less, so it is shorter: \(wide.height) vs \(medium.height)")

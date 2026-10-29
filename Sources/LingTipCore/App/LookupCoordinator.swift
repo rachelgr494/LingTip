@@ -34,9 +34,30 @@ public final class LookupCoordinator: ObservableObject {
     }
 
     /// Entry point for both the global shortcut and the menu item.
+    /// Pressed again while the text input is open, it translates what was typed.
     public func translateSelection() {
+        if let draft = tooltip.inputDraft {
+            translateTyped(draft)
+            return
+        }
         inflight?.cancel()
         inflight = Task { await performLookup() }
+    }
+
+    private func translateTyped(_ raw: String) {
+        let text = Self.normalize(raw)
+        guard !text.isEmpty else {
+            tooltip.hide()
+            return
+        }
+        inflight?.cancel()
+        inflight = Task { await translate(text) }
+    }
+
+    private func showInput(at anchor: NSPoint) {
+        tooltip.showInput(at: anchor) { [weak self] typed in
+            self?.translateTyped(typed)
+        }
     }
 
     private func performLookup() async {
@@ -57,19 +78,25 @@ public final class LookupCoordinator: ObservableObject {
         }
 
         guard let raw = await SelectionReader.read() else {
-            let hint = SelectionReader.isSecureInputActive
-                ? "A password field is active; macOS blocks reading from it."
-                : "Select a word or phrase, then press the shortcut."
-            tooltip.show(.error("No text selected.", hint: hint), at: anchor)
+            if SelectionReader.isSecureInputActive {
+                tooltip.show(.error("No text selected.", hint: "A password field is active; macOS blocks reading from it."), at: anchor)
+            } else {
+                showInput(at: anchor)
+            }
             return
         }
 
         let text = Self.normalize(raw)
         guard !text.isEmpty else {
-            tooltip.show(.error("No text selected."), at: anchor)
+            showInput(at: anchor)
             return
         }
 
+        await translate(text, at: anchor)
+    }
+
+    /// Pass `at:` for a fresh lookup; omit it to translate in the tooltip already on screen.
+    private func translate(_ text: String, at anchor: NSPoint? = nil) async {
         let pair = settings.resolvePair(for: text)
         tooltip.show(.loading(text, pair), at: anchor)
 

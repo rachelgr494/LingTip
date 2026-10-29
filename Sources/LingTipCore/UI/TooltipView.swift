@@ -41,6 +41,9 @@ struct TooltipView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 8) {
             switch model.state {
+            case .input:
+                inputForm
+
             case .loading(let text, let pair):
                 header(text, pair)
                 HStack(spacing: 8) {
@@ -77,6 +80,34 @@ struct TooltipView: View {
     }
 
     // MARK: Pieces
+
+    private var inputForm: some View {
+        let isEmpty = model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let submit = { if !isEmpty { model.onSubmit?(model.draft) } }
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Type text to translate")
+                .font(.callout)
+                .foregroundStyle(Brand.cream.opacity(0.7))
+            InputField(text: $model.draft, placeholder: "Word or phrase", onSubmit: submit)
+                .frame(maxWidth: .infinity)
+            HStack {
+                Spacer()
+                Button(action: submit) {
+                    Text("Translate")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(Brand.navy)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Brand.gradient))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(isEmpty)
+                .opacity(isEmpty ? 0.5 : 1)
+                .help("Translate (Return)")
+            }
+        }
+    }
 
     private func header(_ text: String, _ pair: LanguagePair) -> some View {
         HStack(alignment: .firstTextBaseline) {
@@ -139,6 +170,81 @@ struct TooltipView: View {
                 }
             }
         }
+    }
+}
+
+/// AppKit text field, so it can take focus as soon as the input appears (SwiftUI's
+/// @FocusState is a macro; see Package.swift). Return submits.
+private struct InputField: NSViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    let onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = FocusingTextField()
+        field.placeholderString = placeholder
+        field.font = .systemFont(ofSize: 15)
+        field.bezelStyle = .roundedBezel
+        field.alignment = .natural
+        field.baseWritingDirection = .natural   // Hebrew input lays out right-to-left
+        field.lineBreakMode = .byTruncatingHead
+        field.delegate = context.coordinator
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        if field.stringValue != text { field.stringValue = text }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: InputField
+
+        init(_ parent: InputField) { self.parent = parent }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            guard selector == #selector(NSResponder.insertNewline(_:)) else { return false }
+            parent.onSubmit()
+            return true
+        }
+    }
+}
+
+/// Grabs focus when shown, and handles ⌘X/C/V/A/Z itself: a menu-bar app has no Edit menu
+/// to route those key equivalents.
+private final class FocusingTextField: NSTextField {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window else { return }
+            window.makeFirstResponder(self)
+        }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+              let key = event.charactersIgnoringModifiers else {
+            return super.performKeyEquivalent(with: event)
+        }
+        let action: Selector? = switch key {
+        case "x": #selector(NSText.cut(_:))
+        case "c": #selector(NSText.copy(_:))
+        case "v": #selector(NSText.paste(_:))
+        case "a": #selector(NSText.selectAll(_:))
+        case "z": Selector(("undo:"))
+        default: nil
+        }
+        if let action, NSApp.sendAction(action, to: nil, from: self) { return true }
+        return super.performKeyEquivalent(with: event)
     }
 }
 
